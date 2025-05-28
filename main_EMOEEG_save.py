@@ -13,7 +13,7 @@ import time
 mne.set_log_level("ERROR")
 
 # EMOEEG DATASET
-sfreq = 200
+sfreq = 125
 n_sub = 70
 volt_factor = 1e-6
 channel_names = [
@@ -39,7 +39,7 @@ thresholds = [
 # montage_file_path = 'Z:/qingzhu/EEG_raw/SEED-VII/src/channel_62_pos.locs'
 # montage = mne.channels.read_custom_montage(montage_file_path)
 montage = mne.channels.make_standard_montage("standard_1020")
-save_dir = 'Z:/qingzhu/AutoICA_Processed_EEG/EMOEEG_final'
+save_dir = 'Z:/qingzhu/AutoICA_Processed_EEG/EMOEEG_Pretrain'
 
 def detect_bad_channels(raw, thresholds):
     data = raw.get_data(picks='eeg')  # 获取 EEG 数据，形状为 (n_channels, n_times)
