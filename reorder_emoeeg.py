@@ -137,10 +137,10 @@ def reorder_eeg_trials(root_dir, subject_num, trial_type='imagery'):
 
 def main():
     # Set your root directory
-    root_dir = r"Z:/xuxin/new_pre/reorder"
+    root_dir = r"Z:/xuxin/new_pre/EMOEEG_final"
     
     # Process all subjects
-    for subject_num in range(30, 54):  # sub01 to sub60
+    for subject_num in range(2, 61):  # sub01 to sub60
         # Skip if directory doesn't exist
         sub_dir = os.path.join(root_dir, f"sub_{subject_num}")
         if not os.path.exists(sub_dir):
