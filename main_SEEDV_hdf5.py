@@ -5,8 +5,12 @@ import mne
 from scipy.io import savemat
 from collections import defaultdict
 import h5py
+from pathlib import Path
 
 from scipy.interpolate import interp1d
+
+print(np.__version__)
+print(mne.__version__)
 
 def linear_resample(data, orig_sfreq, target_sfreq):
     """
@@ -30,8 +34,8 @@ def linear_resample(data, orig_sfreq, target_sfreq):
 
 # ======================= 配置 =======================
 input_dir = "C:\EEG_data\EEG_raw_cnt"
-output_dir = "C:\EEG_data\EEG_minimal_mat"
-target_sfreq = 125
+output_dir = "V:\daily_eeg_emotion\Data\SEED-V\SEEDV_hdf5"
+target_sfreq = 200
 os.makedirs(output_dir, exist_ok=True)
 
 # ======================= trial 时间 =======================
@@ -65,10 +69,11 @@ for f in os.listdir(input_dir):
         subject_files[sub][int(sess)] = os.path.join(input_dir, f)
 
 # ======================= 主处理 =======================
+ch_names = None
 for sub, sessions in subject_files.items():
     print(sub)
-    if(sub != '7'):
-        continue
+    # if(sub != '7'):
+    #     continue
     print(f"\n处理 sub_{sub}")
 
     raws = []
@@ -79,12 +84,14 @@ for sub, sessions in subject_files.items():
         print(f'reading {sessions[sess]}')
         raw = mne.io.read_raw_cnt(
             sessions[sess],
-            preload=True,
-            verbose=False
+            preload=True
         )
         useless_ch = ['M1', 'M2', 'VEO', 'HEO']
         raw.drop_channels(useless_ch)
-        raw.filter(0.05,47)
+        ch_names = raw.ch_names
+        raw.notch_filter(freqs=50.0, verbose=False)
+        raw.filter(l_freq=0.1, h_freq=75.0, verbose=False)
+        raw.resample(target_sfreq, verbose=False)
         raws.append(raw)
         if sfreq is None:
             sfreq = raw.info['sfreq']
@@ -92,11 +99,11 @@ for sub, sessions in subject_files.items():
     raw_all = mne.concatenate_raws(raws)
     data_all = raw_all.get_data()   # (C, T)
 
-    data_all = linear_resample(
-        data_all,
-        orig_sfreq=sfreq,
-        target_sfreq=target_sfreq
-    )
+    # data_all = linear_resample(
+    #     data_all,
+    #     orig_sfreq=sfreq,
+    #     target_sfreq=target_sfreq
+    # )
 
     # ======================= 只保留 trial 片段 =======================
     trial_segments = []
@@ -115,40 +122,19 @@ for sub, sessions in subject_files.items():
 
             trial_idx += 1
 
-    # 拼接 45 个 trial
-    data_all = np.concatenate(trial_segments, axis=1)
+    print(len(trial_segments))
+    print(ch_names)
+    
+    trial_save_path = Path(f"{output_dir}/sub{sub}.h5")
+    trial_save_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # ---- trial duration ----
-    trial_duration = []
-    for s in range(3):
-        trial_duration.extend(end_seconds[s] - start_seconds[s])
-    trial_duration = np.array(trial_duration)[None, :]  # (1, 45)
-
-    # ---- 保存路径 ----
-    sub_dir = os.path.join(output_dir, f"sub_{sub}")
-    os.makedirs(sub_dir, exist_ok=True)
-
-    # ================= 保存 data.mat =================
-    savemat(
-        os.path.join(sub_dir, "data.mat"),
-        {
-            "data": data_all,
-            "trial_duration": trial_duration
-        }
-    )
-
-    # ================= 保存 label.mat =================
-    label_dict = {}
-    for i, lbl in enumerate(trial_labels):
-        label_tmp = np.zeros((5, 1))
-        label_tmp[lbl] = 1
-        label_dict[f"trial_{i+1}"] = label_tmp
-
-    savemat(
-        os.path.join(sub_dir, "label.mat"),
-        label_dict
-    )
-
-    print(f"  sub_{sub} 完成，45 trials")
-
-print("\n✅ 所有被试处理完成")
+    with h5py.File(trial_save_path, 'w') as f:
+        for i_trial, data_trial in enumerate(trial_segments):
+            print(data_trial.shape)
+            grp_name = f"vid{i_trial}"
+            grp = f.create_group(grp_name)
+            dset = grp.create_dataset('eeg', data=data_trial)
+            dset.attrs['chOrder'] = ch_names
+            dset.attrs['rsFreq'] = target_sfreq
+            dset.attrs['label'] = trial_labels[i_trial]
+            dset.attrs['video_id'] = i_trial
